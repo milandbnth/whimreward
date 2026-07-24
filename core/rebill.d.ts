@@ -2,7 +2,7 @@
  * Re-bill — TypeScript Declarations.
  *
  * @module core/rebill
- * @version 1.0.0
+ * @version 1.0.1
  */
 import type { LedgerEntry, LedgerStore } from './types.js';
 

@@ -2,7 +2,7 @@
  * Financial-class taxonomy and deltas — TypeScript Declarations.
  *
  * @module core/taxonomy
- * @version 1.0.0
+ * @version 1.0.1
  */
 import type { LedgerEntry } from './types.js';
 

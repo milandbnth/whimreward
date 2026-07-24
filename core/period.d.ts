@@ -2,7 +2,7 @@
  * Accounting periods — TypeScript Declarations.
  *
  * @module core/period
- * @version 1.0.0
+ * @version 1.0.1
  */
 import type { Period } from './types.js';
 

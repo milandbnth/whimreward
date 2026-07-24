@@ -2,7 +2,7 @@
  * The minimal-entry classifier — TypeScript Declarations.
  *
  * @module core/classify
- * @version 1.0.0
+ * @version 1.0.1
  */
 import type { LedgerStore } from './types.js';
 

@@ -2,7 +2,7 @@
  * Money primitives — TypeScript Declarations.
  *
  * @module core/money
- * @version 1.0.0
+ * @version 1.0.1
  */
 export declare const MAX_AMOUNT_CENTS: number;
 export declare function cents(dollars: number): number;

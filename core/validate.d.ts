@@ -2,7 +2,7 @@
  * The boundary guards — TypeScript Declarations.
  *
  * @module core/validate
- * @version 1.0.0
+ * @version 1.0.1
  */
 import type { LedgerEntry, LedgerStore } from './types.js';
 

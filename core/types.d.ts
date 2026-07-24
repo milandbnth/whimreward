@@ -2,7 +2,7 @@
  * Domain shapes — TypeScript Declarations.
  *
  * @module core/types
- * @version 1.0.0
+ * @version 1.0.1
  */
 
 export interface Period {

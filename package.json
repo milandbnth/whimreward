@@ -1,6 +1,6 @@
 {
     "name": "@joelouf/ledger-system",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "A zero-dependency, append-only ledger engine that derives every balance, status, P&L, and deposit figure as a deterministic fold over one immutable transaction log.",
     "type": "module",
     "main": "index.js",
