@@ -3,3 +3,7 @@ node_modules/
 *.log
 *.tgz
 !pnpm-lock.yaml
+
+.env
+.env.*
+!.env.example
