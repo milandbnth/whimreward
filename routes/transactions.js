@@ -2,67 +2,72 @@ import express from "express";
 import { randomUUID } from "crypto";
 import { pool } from "../db/client.js";
 import { validateRewardTransaction } from "../core/reward-ledger.js";
+import { createAuditLog } from "../db/audit.js";
 
 const router = express.Router();
 
 router.post("/", async (req, res) => {
   try {
-    const {
-      customerId,
-      amount,
-      type,
-      reason,
-      reference = null,
-      postedBy,
-      relatedTransactionId = null
-    } = req.body;
+    const client = await pool.connect();
+    try {
+      const {
+        customerId,
+        amount,
+        type,
+        reason,
+        reference = null,
+        postedBy,
+        relatedTransactionId = null
+      } = req.body;
 
-    const transaction = {
-      id: randomUUID(),
-      customerId,
-      amount,
-      type,
-      reason,
-      reference,
-      postedBy,
-      postedAt: new Date().toISOString(),
-      relatedTransactionId
-    };
+      const transaction = {
+        id: randomUUID(),
+        customerId,
+        amount,
+        type,
+        reason,
+        reference,
+        postedBy,
+        postedAt: new Date().toISOString(),
+        relatedTransactionId
+      };
 
-    validateRewardTransaction(transaction);
+      validateRewardTransaction(transaction);
 
-    const customerResult = await pool.query(
-      `
+      const customerResult = await client.query(
+        `
       SELECT id
       FROM customers
       WHERE id = $1
       `,
-      [customerId]
-    );
+        [customerId]
+      );
 
-    if (customerResult.rows.length === 0) {
-      return res.status(404).json({
-        error: "Customer not found"
-      });
-    }
+      if (customerResult.rows.length === 0) {
+        return res.status(404).json({
+          error: "Customer not found"
+        });
+      }
 
-    const userResult = await pool.query(
-      `
+      const userResult = await client.query(
+        `
       SELECT id
       FROM users
       WHERE id = $1
       `,
-      [postedBy]
-    );
+        [postedBy]
+      );
 
-    if (userResult.rows.length === 0) {
-      return res.status(404).json({
-        error: "User not found"
-      });
-    }
+      if (userResult.rows.length === 0) {
+        return res.status(404).json({
+          error: "User not found"
+        });
+      }
 
-    const result = await pool.query(
-      `
+      await client.query("BEGIN");
+
+      const result = await client.query(
+        `
       INSERT INTO reward_transactions (
         id,
         customer_id,
@@ -87,20 +92,41 @@ router.post("/", async (req, res) => {
         related_transaction_id,
         created_at
       `,
-      [
-        transaction.id,
-        transaction.customerId,
-        transaction.amount,
-        transaction.type,
-        transaction.reason,
-        transaction.reference,
-        transaction.postedBy,
-        transaction.postedAt,
-        transaction.relatedTransactionId
-      ]
-    );
+        [
+          transaction.id,
+          transaction.customerId,
+          transaction.amount,
+          transaction.type,
+          transaction.reason,
+          transaction.reference,
+          transaction.postedBy,
+          transaction.postedAt,
+          transaction.relatedTransactionId
+        ]
+      );
 
-    res.status(201).json(result.rows[0]);
+      await createAuditLog(client, {
+        action: "CREATE_REWARD_TRANSACTION",
+        userId: transaction.postedBy,
+        customerId: transaction.customerId,
+        transactionId: transaction.id,
+        details: {
+          amount: transaction.amount,
+          type: transaction.type,
+          reason: transaction.reason,
+          reference: transaction.reference
+        }
+      });
+
+      await client.query("COMMIT");
+
+      res.status(201).json(result.rows[0]);
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   } catch (error) {
     res.status(400).json({
       error: error.message
