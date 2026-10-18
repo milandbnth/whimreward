@@ -51,6 +51,7 @@ jobs:
             --exclude='node_modules/' \
             -e 'ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes' \
             ./ "ubuntu@${OCI_HOST}:/opt/whimreward/"
+
       - name: Install production dependencies and restart service
         env:
           OCI_HOST: ${{ vars.OCI_HOST }}
@@ -64,11 +65,11 @@ jobs:
              sudo /usr/bin/systemctl restart whimreward.service &&
              sudo /usr/bin/systemctl is-active whimreward.service &&
              for attempt in $(seq 1 10); do
-  if curl --fail --silent --show-error http://127.0.0.1:3000/health; then
-    exit 0
-  fi
-  echo "Health check attempt ${attempt}/10; retrying in 2 seconds..."
-  sleep 2
-done
-echo "Health check failed after retries."
-exit 1
+               if curl --fail --silent http://127.0.0.1:3000/health; then
+                 exit 0
+               fi
+               echo "Health check attempt ${attempt}/10; retrying in 2 seconds..."
+               sleep 2
+             done
+             echo "Health check failed after retries."
+             exit 1'
