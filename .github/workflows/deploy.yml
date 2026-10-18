@@ -63,4 +63,12 @@ jobs:
              corepack pnpm@10.32.1 install --prod --frozen-lockfile &&
              sudo /usr/bin/systemctl restart whimreward.service &&
              sudo /usr/bin/systemctl is-active whimreward.service &&
-             curl --fail --silent --show-error http://127.0.0.1:3000/health'
+             for attempt in $(seq 1 10); do
+  if curl --fail --silent --show-error http://127.0.0.1:3000/health; then
+    exit 0
+  fi
+  echo "Health check attempt ${attempt}/10; retrying in 2 seconds..."
+  sleep 2
+done
+echo "Health check failed after retries."
+exit 1
