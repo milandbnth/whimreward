@@ -1,8 +1,60 @@
 import express from "express";
 import { randomUUID } from "crypto";
 import { pool } from "../db/client.js";
+import { requireAuth } from "../auth/require-auth.js";
 
 const router = express.Router();
+
+router.use(requireAuth);
+
+
+router.get("/", async (req, res) => {
+  try {
+    const search =
+      typeof req.query.search === "string"
+        ? req.query.search.trim()
+        : "";
+
+    if (search.length > 100) {
+      return res.status(400).json({
+        error: "Search query must be 100 characters or fewer"
+      });
+    }
+
+    const result = await pool.query(
+      `
+      SELECT
+        c.id,
+        c.name,
+        c.email,
+        c.created_at,
+        COALESCE(SUM(rt.amount), 0)::INTEGER AS balance
+      FROM customers c
+      LEFT JOIN reward_transactions rt
+        ON rt.customer_id = c.id
+      WHERE
+        $1 = ''
+        OR c.name ILIKE '%' || $1 || '%'
+        OR COALESCE(c.email, '') ILIKE '%' || $1 || '%'
+      GROUP BY c.id, c.name, c.email, c.created_at
+      ORDER BY c.name ASC
+      LIMIT 50
+      `,
+      [search]
+    );
+
+    return res.json({
+      customers: result.rows
+    });
+  } catch (error) {
+    console.error("Failed to search customers:", error.message);
+
+    return res.status(500).json({
+      error: "Failed to search customers"
+    });
+  }
+});
+
 
 router.post("/", async (req, res) => {
   try {

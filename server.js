@@ -4,10 +4,42 @@ import "dotenv/config";
 import { pool } from "./db/client.js";
 import customerRoutes from "./routes/customers.js";
 import transactionRoutes from "./routes/transactions.js";
+import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
+import authRoutes from "./routes/auth.js";
 
 const app = express();
 
+if (!process.env.SESSION_SECRET) {
+  throw new Error("SESSION_SECRET is required");
+}
+
+const PgSession = connectPgSimple(session);
+
+app.use(
+  session({
+    store: new PgSession({
+      pool,
+      tableName: "user_sessions",
+      createTableIfMissing: false
+    }),
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 8 * 60 * 60 * 1000
+    }
+  })
+);
+
 app.use(express.json());
+
+app.use(express.static("public"));
+
+app.use("/auth", authRoutes);
 
 app.use("/customers", customerRoutes);
 

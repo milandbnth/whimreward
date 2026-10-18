@@ -127,9 +127,7 @@ test("does not allow an existing transaction to be modified", () => {
 
   assert.equal(Object.isFrozen(transaction), true);
 
-  assert.throws(() => {
-    transaction.amount = 500;
-  });
+  assert.equal(Reflect.set(transaction, "amount", 500), false);
 
   assert.equal(transaction.amount, 1000);
 });
