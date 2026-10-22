@@ -7,6 +7,7 @@ import transactionRoutes from "./routes/transactions.js";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import authRoutes from "./routes/auth.js";
+import integrationRoutes from "./routes/integration.js";
 
 const app = express();
 
@@ -40,6 +41,8 @@ app.use(express.json());
 app.use(express.static("public"));
 
 app.use("/auth", authRoutes);
+
+app.use("/integration", integrationRoutes);
 
 app.use("/customers", customerRoutes);
 

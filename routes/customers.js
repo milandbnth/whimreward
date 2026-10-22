@@ -25,6 +25,7 @@ router.get("/", async (req, res) => {
       `
       SELECT
         c.id,
+        c.whim_id,
         c.name,
         c.email,
         c.created_at,
@@ -91,7 +92,7 @@ router.get("/:id", async (req, res) => {
 
     const result = await pool.query(
       `
-      SELECT id, name, email, created_at
+      SELECT id, whim_id, name, email, created_at
       FROM customers
       WHERE id = $1
       `,
