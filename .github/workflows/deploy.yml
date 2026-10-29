@@ -1,75 +1,122 @@
+
 name: Deploy WhimReward to OCI
+
 on:
   push:
     branches:
       - main
+
 permissions:
   contents: read
+
 concurrency:
   group: whimreward-production
   cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 10.32.1
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
       - name: Run tests
         run: pnpm test
+
       - name: Typecheck
         run: pnpm run typecheck
+
       - name: Security audit
         run: pnpm audit --audit-level high
+
       - name: Configure SSH
         env:
           SSH_PRIVATE_KEY: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
           SSH_KNOWN_HOSTS: ${{ secrets.OCI_KNOWN_HOSTS }}
         run: |
+          set -euo pipefail
           install -m 700 -d ~/.ssh
           printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
-      - name: Transfer application
-        env:
-          OCI_HOST: ${{ vars.OCI_HOST }}
-        run: |
-          rsync -az --delete \
-            --exclude='.git/' \
-            --exclude='.env' \
-            --exclude='node_modules/' \
-            -e 'ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes' \
-            ./ "ubuntu@${OCI_HOST}:/opt/whimreward/"
 
-      - name: Install production dependencies and restart service
+      - name: Validate deployment targets
         env:
           OCI_HOST: ${{ vars.OCI_HOST }}
+          OCI_HOST_VM2: ${{ vars.OCI_HOST_VM2 }}
         run: |
-          ssh -i ~/.ssh/deploy_key \
-            -o IdentitiesOnly=yes \
-            -o StrictHostKeyChecking=yes \
-            "ubuntu@${OCI_HOST}" \
-            'cd /opt/whimreward &&
-             corepack pnpm@10.32.1 install --prod --frozen-lockfile &&
-             sudo /usr/bin/systemctl restart whimreward.service &&
-             sudo /usr/bin/systemctl is-active whimreward.service &&
-             for attempt in $(seq 1 10); do
-               if curl --fail --silent http://127.0.0.1:3000/health; then
-                 exit 0
-               fi
-               echo "Health check attempt ${attempt}/10; retrying in 2 seconds..."
-               sleep 2
-             done
-             echo "Health check failed after retries."
-             exit 1'
+          set -euo pipefail
+          test -n "$OCI_HOST" || {
+            echo "GitHub variable OCI_HOST is missing"
+            exit 1
+          }
+          test -n "$OCI_HOST_VM2" || {
+            echo "GitHub variable OCI_HOST_VM2 is missing"
+            exit 1
+          }
+          test "$OCI_HOST" != "$OCI_HOST_VM2" || {
+            echo "VM1 and VM2 must have different host values"
+            exit 1
+          }
+
+      - name: Deploy VM 2, then VM 1
+        env:
+          OCI_HOST: ${{ vars.OCI_HOST }}
+          OCI_HOST_VM2: ${{ vars.OCI_HOST_VM2 }}
+        run: |
+          set -euo pipefail
+
+          SSH="ssh -i $HOME/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
+          RSYNC_RSH="ssh -i $HOME/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
+
+          for HOST in "$OCI_HOST_VM2" "$OCI_HOST"; do
+            echo "Deploying to $HOST"
+
+            rsync -az --delete \
+              --exclude='.git/' \
+              --exclude='.env' \
+              --exclude='node_modules/' \
+              --exclude='oracle-wallets/' \
+              -e "$RSYNC_RSH" \
+              ./ "ubuntu@${HOST}:/opt/whimreward/"
+
+            $SSH "ubuntu@${HOST}" \
+              'set -e
+               cd /opt/whimreward
+               corepack pnpm@10.32.1 install --prod --frozen-lockfile
+               sudo /usr/bin/systemctl restart whimreward.service
+               sudo /usr/bin/systemctl is-active whimreward.service
+
+               for attempt in $(seq 1 10); do
+                 if curl --fail --silent --show-error \
+                   http://127.0.0.1:3000/health; then
+                   echo
+                   echo "Health check passed."
+                   exit 0
+                 fi
+
+                 echo "Health check attempt ${attempt}/10; retrying in 2 seconds..."
+                 sleep 2
+               done
+
+               echo "Health check failed."
+               exit 1'
+
+            echo "Deployment and health check passed for $HOST"
+          done
