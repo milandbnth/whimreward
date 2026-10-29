@@ -1,8 +1,60 @@
+
 import { Router } from "express";
 import { pool } from "../db/client.js";
+import { getWhimdbPool } from "../db/oracle-client.js";
+import { isOracleBackend } from "../db/backend.js";
 import { verifyPassword } from "../auth/password.js";
 
 const router = Router();
+
+async function findUserByEmail(email) {
+  if (!isOracleBackend) {
+    const result = await pool.query(
+      `
+      SELECT id, name, email, password_hash, is_active
+      FROM users
+      WHERE LOWER(email) = LOWER($1)
+      LIMIT 1
+      `,
+      [email]
+    );
+
+    return result.rows[0] ?? null;
+  }
+
+  const oraclePool = await getWhimdbPool();
+  const connection = await oraclePool.getConnection();
+
+  try {
+    const result = await connection.execute(
+      `
+      SELECT
+        id AS "id",
+        name AS "name",
+        email AS "email",
+        password_hash AS "password_hash",
+        is_active AS "is_active"
+      FROM users
+      WHERE LOWER(email) = LOWER(:email)
+      FETCH FIRST 1 ROWS ONLY
+      `,
+      { email }
+    );
+
+    const row = result.rows?.[0];
+    if (!row) return null;
+
+    return {
+      id: row[0],
+      name: row[1],
+      email: row[2],
+      password_hash: row[3],
+      is_active: row[4]
+    };
+  } finally {
+    await connection.close();
+  }
+}
 
 router.post("/login", async (req, res) => {
   try {
@@ -19,17 +71,7 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    const result = await pool.query(
-      `
-      SELECT id, name, email, password_hash, is_active
-      FROM users
-      WHERE LOWER(email) = LOWER($1)
-      LIMIT 1
-      `,
-      [email.trim()]
-    );
-
-    const user = result.rows[0];
+    const user = await findUserByEmail(email.trim());
 
     if (
       !user ||
@@ -67,7 +109,9 @@ router.post("/login", async (req, res) => {
         });
       });
     });
-  } catch {
+  } catch (error) {
+    console.error("Login failed:", error.message);
+
     return res.status(500).json({
       error: "Unable to process login"
     });
