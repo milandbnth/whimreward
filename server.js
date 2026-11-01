@@ -38,8 +38,7 @@ app.use(
     cookie: {
       httpOnly: true,
       sameSite: "lax",
-      secure: false,
-      maxAge: 8 * 60 * 60 * 1000
+      secure: process.env.NODE_ENV === "production"
     }
   })
 );
