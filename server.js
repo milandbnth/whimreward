@@ -14,6 +14,9 @@ import {getWhimdbPool,getWhimtrxPool,closeOraclePools} from "./db/oracle-client.
 
 const app = express();
 
+// 1. Trust proxy so Express correctly handles secure headers behind Nginx
+app.set("trust proxy", 1);
+
 if (!process.env.SESSION_SECRET) {
   throw new Error("SESSION_SECRET is required");
 }
