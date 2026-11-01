@@ -6,7 +6,7 @@ import { isOracleBackend } from "../db/backend.js";
 
 const router = express.Router();
 
-function requireWhimstackSecret(req, res, next) {
+export function requireWhimstackSecret(req, res, next){
   const expected = process.env.WHIMSTACK_API_SECRET;
   const supplied = req.get("x-api-key");
 

@@ -3,7 +3,10 @@ import { Router } from "express";
 import { pool } from "../db/client.js";
 import { getWhimdbPool } from "../db/oracle-client.js";
 import { isOracleBackend } from "../db/backend.js";
-import { verifyPassword } from "../auth/password.js";
+import { hashPassword, verifyPassword } from "../auth/password.js";
+import { randomUUID } from "crypto";
+import { requireWhimstackSecret } from "./integration.js";
+
 
 const router = Router();
 
@@ -55,6 +58,179 @@ async function findUserByEmail(email) {
     await connection.close();
   }
 }
+
+
+router.post("/register", requireWhimstackSecret, async (req, res) => {
+  const name =
+    typeof req.body?.name === "string" ? req.body.name.trim() : "";
+
+  const email =
+    typeof req.body?.email === "string"
+      ? req.body.email.trim().toLowerCase()
+      : "";
+
+  const password = req.body?.password;
+
+  if (!name || name.length > 255) {
+    return res.status(400).json({
+      error: "A valid name is required (maximum 255 characters)"
+    });
+  }
+
+  if (
+    !email ||
+    email.length > 320 ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  ) {
+    return res.status(400).json({
+      error: "A valid email address is required"
+    });
+  }
+
+  if (typeof password !== "string" || password.length < 8) {
+    return res.status(400).json({
+      error: "Password must be at least 8 characters"
+    });
+  }
+
+  let connection;
+
+  try {
+    const passwordHash = await hashPassword(password);
+    const id = randomUUID();
+
+    if (isOracleBackend) {
+      const oraclePool = await getWhimdbPool();
+      connection = await oraclePool.getConnection();
+
+      const existing = await connection.execute(
+        `SELECT id
+         FROM users
+         WHERE LOWER(email) = :email
+         FETCH FIRST 1 ROWS ONLY`,
+        { email }
+      );
+
+      if (existing.rows?.length > 0) {
+        return res.status(409).json({
+          error: "A user with this email already exists"
+        });
+      }
+
+      await connection.execute(
+        `INSERT INTO users (
+          id,
+          name,
+          email,
+          password_hash,
+          is_active
+        )
+        VALUES (
+          :id,
+          :name,
+          :email,
+          :password_hash,
+          1
+        )`,
+        {
+          id,
+          name,
+          email,
+          password_hash: passwordHash
+        }
+      );
+
+      await connection.execute(
+        `INSERT INTO audit_log (
+          id,
+          action,
+          user_id,
+          details,
+          created_at
+        )
+        VALUES (
+          :id,
+          :action,
+          :user_id,
+          :details,
+          SYSTIMESTAMP
+        )`,
+        {
+          id: randomUUID(),
+          action: "USER_REGISTERED",
+          user_id: id,
+          details: JSON.stringify({
+            email,
+            source: "whimstack"
+          })
+        }
+      );
+
+      await connection.commit();
+    } else {
+      const existing = await pool.query(
+        `SELECT id
+         FROM users
+         WHERE LOWER(email) = LOWER($1)
+         LIMIT 1`,
+        [email]
+      );
+
+      if (existing.rows.length > 0) {
+        return res.status(409).json({
+          error: "A user with this email already exists"
+        });
+      }
+
+      await pool.query(
+        `INSERT INTO users (
+          id,
+          name,
+          email,
+          password_hash,
+          is_active
+        )
+        VALUES ($1, $2, $3, $4, TRUE)`,
+        [id, name, email, passwordHash]
+      );
+    }
+
+    return res.status(201).json({
+      message: "User registered successfully",
+      user: {
+        id,
+        name,
+        email,
+        is_active: true
+      }
+    });
+  } catch (error) {
+    if (connection) {
+      try {
+        await connection.rollback();
+      } catch (rollbackError) {
+        console.error("Registration rollback failed:", rollbackError.message);
+      }
+    }
+
+    if (error.errorNum === 1 || error.code === "23505") {
+      return res.status(409).json({
+        error: "A user with this email already exists"
+      });
+    }
+
+    console.error("User registration failed:", error.message);
+
+    return res.status(500).json({
+      error: "Unable to register user"
+    });
+  } finally {
+    if (connection) {
+      await connection.close();
+    }
+  }
+});
+
 
 router.post("/login", async (req, res) => {
   try {
