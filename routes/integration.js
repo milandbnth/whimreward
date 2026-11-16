@@ -1,7 +1,7 @@
 import express from "express";
 import { randomUUID, timingSafeEqual } from "crypto";
 import { pool } from "../db/client.js";
-import { getWhimdbPool } from "../db/oracle-client.js";
+import { getWhimdbPool, getWhimtrxPool } from "../db/oracle-client.js";
 import { isOracleBackend } from "../db/backend.js";
 
 const router = express.Router();
@@ -202,6 +202,116 @@ router.post("/profiles", async (req, res) => {
     });
   } finally {
     client?.release();
+  }
+});
+
+router.get("/customers/balance", async (req, res) => {
+  const identifier =
+    typeof req.query.identifier === "string"
+      ? req.query.identifier.trim().toLowerCase()
+      : "";
+
+  if (!identifier) {
+    return res.status(400).json({
+      error: "identifier query parameter is required"
+    });
+  }
+
+  if (identifier.length > 100) {
+    return res.status(400).json({
+      error: "identifier must be 100 characters or fewer"
+    });
+  }
+
+  try {
+    if (isOracleBackend) {
+      const whimdbPool = await getWhimdbPool();
+      const customerConn = await whimdbPool.getConnection();
+      let customer;
+
+      try {
+        const result = await customerConn.execute(
+          `SELECT id, whim_id, name, email
+           FROM customers
+           WHERE LOWER(email) = :identifier
+              OR LOWER(NVL(whim_id, '')) = :identifier
+              OR LOWER(id) = :identifier
+           FETCH FIRST 1 ROWS ONLY`,
+          { identifier }
+        );
+
+        const row = result.rows?.[0];
+
+        if (!row) {
+          return res.status(404).json({
+            error: "Customer not found in WhimReward"
+          });
+        }
+
+        customer = {
+          id: row[0],
+          whim_id: row[1],
+          name: row[2],
+          email: row[3]
+        };
+      } finally {
+        await customerConn.close();
+      }
+
+      const whimtrxPool = await getWhimtrxPool();
+      const trxConn = await whimtrxPool.getConnection();
+
+      try {
+        const balResult = await trxConn.execute(
+          `SELECT NVL(SUM(amount), 0)
+           FROM reward_transactions
+           WHERE customer_id = :id`,
+          { id: customer.id }
+        );
+
+        return res.json({
+          customer,
+          balance: Number(balResult.rows?.[0]?.[0] ?? 0)
+        });
+      } finally {
+        await trxConn.close();
+      }
+    }
+
+    const custResult = await pool.query(
+      `SELECT id, whim_id, name, email
+       FROM customers
+       WHERE LOWER(email) = $1
+          OR LOWER(COALESCE(whim_id, '')) = $1
+          OR LOWER(id::text) = $1
+       LIMIT 1`,
+      [identifier]
+    );
+
+    if (custResult.rows.length === 0) {
+      return res.status(404).json({
+        error: "Customer not found in WhimReward"
+      });
+    }
+
+    const customer = custResult.rows[0];
+    const balResult = await pool.query(
+      `SELECT COALESCE(SUM(amount), 0)::INTEGER AS balance
+       FROM reward_transactions
+       WHERE customer_id = $1`,
+      [customer.id]
+    );
+
+    return res.json({
+      customer,
+      balance: balResult.rows[0].balance
+    });
+  } catch (error) {
+    console.error("Integration balance lookup failed:", error.message);
+
+    return res.status(500).json({
+      error: "Failed to retrieve customer balance"
+    });
   }
 });
 
