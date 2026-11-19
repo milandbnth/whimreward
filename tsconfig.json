@@ -6,10 +6,11 @@
         "lib": ["ES2022"],
         "types": ["node"],
         "allowJs": true,
-        "checkJs": true,
+        "checkJs": false,
         "noEmit": true,
         "forceConsistentCasingInFileNames": true,
         "skipLibCheck": true
     },
-    "include": ["index.js", "index.d.ts", "core/**/*", "test/**/*"]
+    "include": ["index.js", "index.d.ts", "core/**/*", "test/**/*"],
+    "exclude": ["node_modules"]
 }

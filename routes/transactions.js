@@ -1,13 +1,10 @@
 import express from "express";
 import { createHash, randomUUID } from "crypto";
-import { pool } from "../db/client.js";
 import { validateRewardTransaction } from "../core/reward-ledger.js";
-import { createAuditLog, createOracleAuditLog } from "../db/audit.js";
+import { createOracleAuditLog } from "../db/audit.js";
 import { requireAuth } from "../auth/require-auth.js";
 import { getWhimdbPool, getWhimtrxPool } from "../db/oracle-client.js";
-import { isOracleBackend } from "../db/backend.js";
 import oracledb from "oracledb";
-
 
 const router = express.Router();
 router.use(requireAuth);
@@ -17,6 +14,7 @@ function hashIdempotencyRequest(payload) {
     .update(JSON.stringify(payload))
     .digest("hex");
 }
+
 async function findIdempotencyRecord(connection, key) {
   const result = await connection.execute(
     `SELECT request_hash, response_json
@@ -182,9 +180,6 @@ async function postOracleRewardTransaction(transaction, idempotencyKey) {
     }
 
     return { status: 201, body: response };
-
-
-
   } catch (error) {
     await connection.rollback().catch(() => { });
 
@@ -226,6 +221,7 @@ async function postOracleCorrection(id, { amount, reason, reference, postedBy },
   } finally {
     await userConnection.close();
   }
+
   const whimtrxPool = await getWhimtrxPool();
   const connection = await whimtrxPool.getConnection();
 
@@ -265,7 +261,6 @@ async function postOracleCorrection(id, { amount, reason, reference, postedBy },
     }
 
     const original = originalResult.rows[0];
-    const whimdbPool = await getWhimdbPool();
     const customerConnection = await whimdbPool.getConnection();
 
     try {
@@ -280,6 +275,7 @@ async function postOracleCorrection(id, { amount, reason, reference, postedBy },
     } finally {
       await customerConnection.close();
     }
+
     const correctionId = randomUUID();
     const cleanReason = reason.trim();
 
@@ -397,15 +393,11 @@ router.post("/", async (req, res) => {
   } = req.body ?? {};
 
   const postedBy = req.session.user.id;
+  const idempotencyKey = req.get("Idempotency-Key")?.trim();
 
-  // Require an idempotency key only for Oracle writes.
-  const idempotencyKey = isOracleBackend
-    ? req.get("Idempotency-Key")?.trim()
-    : null;
-
-  if (isOracleBackend && (!idempotencyKey || idempotencyKey.length > 255)) {
+  if (!idempotencyKey || idempotencyKey.length > 255) {
     return res.status(400).json({
-      error: "A valid Idempotency-Key header is required for Oracle transactions"
+      error: "A valid Idempotency-Key header is required"
     });
   }
 
@@ -441,129 +433,32 @@ router.post("/", async (req, res) => {
       error: error.message
     });
   }
-  if (isOracleBackend) {
-    try {
-      const result = await postOracleRewardTransaction(
-        transaction,
-        idempotencyKey
-      );
-
-      return res.status(result.status).json(result.body);
-    } catch (error) {
-      console.error("Failed to create Oracle reward transaction:", error.message);
-
-      return res.status(500).json({
-        error: "Failed to create reward transaction"
-      });
-    }
-  }
-  let client;
-  let transactionStarted = false;
 
   try {
-    client = await pool.connect();
-
-    await client.query("BEGIN");
-    transactionStarted = true;
-
-    const customerResult = await client.query(
-      "SELECT id FROM customers WHERE id = $1",
-      [customerId]
+    const result = await postOracleRewardTransaction(
+      transaction,
+      idempotencyKey
     );
 
-    if (customerResult.rows.length === 0) {
-      await client.query("ROLLBACK");
-      transactionStarted = false;
-
-      return res.status(404).json({
-        error: "Customer not found"
-      });
-    }
-
-    const result = await client.query(
-      `
-      INSERT INTO reward_transactions (
-        id,
-        customer_id,
-        amount,
-        type,
-        reason,
-        reference,
-        posted_by,
-        posted_at,
-        related_transaction_id
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      RETURNING
-        id,
-        customer_id,
-        amount,
-        type,
-        reason,
-        reference,
-        posted_by,
-        posted_at,
-        related_transaction_id,
-        created_at
-      `,
-      [
-        transaction.id,
-        transaction.customerId,
-        transaction.amount,
-        transaction.type,
-        transaction.reason,
-        transaction.reference,
-        transaction.postedBy,
-        transaction.postedAt,
-        transaction.relatedTransactionId
-      ]
-    );
-
-    await createAuditLog(client, {
-      action: "CREATE_REWARD_TRANSACTION",
-      userId: transaction.postedBy,
-      customerId: transaction.customerId,
-      transactionId: transaction.id,
-      details: {
-        amount: transaction.amount,
-        type: transaction.type,
-        reason: transaction.reason,
-        reference: transaction.reference
-      }
-    });
-
-    await client.query("COMMIT");
-    transactionStarted = false;
-
-    return res.status(201).json(result.rows[0]);
+    return res.status(result.status).json(result.body);
   } catch (error) {
-    if (client && transactionStarted) {
-      await client.query("ROLLBACK").catch(() => { });
-    }
-
-    console.error("Failed to create reward transaction:", error.message);
+    console.error("Failed to create Oracle reward transaction:", error.message);
 
     return res.status(500).json({
       error: "Failed to create reward transaction"
     });
-  } finally {
-    client?.release();
   }
 });
-
 
 router.post("/:id/correction", async (req, res) => {
   const { id } = req.params;
   const { amount, reason, reference = null } = req.body ?? {};
   const postedBy = req.session.user.id;
+  const idempotencyKey = req.get("Idempotency-Key")?.trim();
 
-  const idempotencyKey = isOracleBackend
-    ? req.get("Idempotency-Key")?.trim()
-    : null;
-
-  if (isOracleBackend && (!idempotencyKey || idempotencyKey.length > 255)) {
+  if (!idempotencyKey || idempotencyKey.length > 255) {
     return res.status(400).json({
-      error: "A valid Idempotency-Key header is required for Oracle corrections"
+      error: "A valid Idempotency-Key header is required"
     });
   }
 
@@ -585,122 +480,20 @@ router.post("/:id/correction", async (req, res) => {
     });
   }
 
-  if (isOracleBackend) {
-
-    try {
-      const result = await postOracleCorrection(
-        id,
-        { amount, reason, reference, postedBy },
-        idempotencyKey
-      );
-
-      return res.status(result.status).json(result.body);
-    } catch (error) {
-      console.error("Failed to create Oracle reward correction:", error.message);
-
-      return res.status(500).json({
-        error: "Failed to create reward correction"
-      });
-    }
-  }
-
-  let client;
-  let transactionStarted = false;
-
   try {
-    client = await pool.connect();
-
-    await client.query("BEGIN");
-    transactionStarted = true;
-
-    const originalResult = await client.query(
-      `
-      SELECT id, customer_id
-      FROM reward_transactions
-      WHERE id = $1
-      `,
-      [id]
+    const result = await postOracleCorrection(
+      id,
+      { amount, reason, reference, postedBy },
+      idempotencyKey
     );
 
-    if (originalResult.rows.length === 0) {
-      await client.query("ROLLBACK");
-      transactionStarted = false;
-
-      return res.status(404).json({
-        error: "Original transaction not found"
-      });
-    }
-
-    const original = originalResult.rows[0];
-    const correctionId = randomUUID();
-
-    const result = await client.query(
-      `
-      INSERT INTO reward_transactions (
-        id,
-        customer_id,
-        amount,
-        type,
-        reason,
-        reference,
-        posted_by,
-        posted_at,
-        related_transaction_id
-      )
-      VALUES ($1, $2, $3, 'correction', $4, $5, $6, NOW(), $7)
-      RETURNING
-        id,
-        customer_id,
-        amount,
-        type,
-        reason,
-        reference,
-        posted_by,
-        posted_at,
-        related_transaction_id,
-        created_at
-      `,
-      [
-        correctionId,
-        original.customer_id,
-        amount,
-        reason.trim(),
-        reference,
-        postedBy,
-        original.id
-      ]
-    );
-
-    await createAuditLog(client, {
-      action: "CREATE_REWARD_CORRECTION",
-      userId: postedBy,
-      customerId: original.customer_id,
-      transactionId: correctionId,
-      details: {
-        amount,
-        type: "correction",
-        reason: reason.trim(),
-        reference,
-        relatedTransactionId: original.id
-      }
-    });
-
-    await client.query("COMMIT");
-    transactionStarted = false;
-
-    return res.status(201).json(result.rows[0]);
+    return res.status(result.status).json(result.body);
   } catch (error) {
-    if (client && transactionStarted) {
-      await client.query("ROLLBACK").catch(() => { });
-    }
-
-    console.error("Failed to create reward correction:", error.message);
+    console.error("Failed to create Oracle reward correction:", error.message);
 
     return res.status(500).json({
       error: "Failed to create reward correction"
     });
-  } finally {
-    client?.release();
   }
 });
 

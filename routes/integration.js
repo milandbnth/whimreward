@@ -1,12 +1,10 @@
 import express from "express";
 import { randomUUID, timingSafeEqual } from "crypto";
-import { pool } from "../db/client.js";
 import { getWhimdbPool, getWhimtrxPool } from "../db/oracle-client.js";
-import { isOracleBackend } from "../db/backend.js";
 
 const router = express.Router();
 
-export function requireWhimstackSecret(req, res, next){
+export function requireWhimstackSecret(req, res, next) {
   const expected = process.env.WHIMSTACK_API_SECRET;
   const supplied = req.get("x-api-key");
 
@@ -28,9 +26,6 @@ export function requireWhimstackSecret(req, res, next){
 }
 
 router.use(requireWhimstackSecret);
-
-
-
 
 async function createOracleCustomer({ name, email }) {
   const oraclePool = await getWhimdbPool();
@@ -101,7 +96,6 @@ async function createOracleCustomer({ name, email }) {
   }
 }
 
-
 router.post("/profiles", async (req, res) => {
   const name =
     typeof req.body.name === "string" ? req.body.name.trim() : "";
@@ -117,91 +111,19 @@ router.post("/profiles", async (req, res) => {
     });
   }
 
-  if (isOracleBackend) {
-    try {
-      const result = await createOracleCustomer({ name, email });
-
-      return res.status(result.created ? 201 : 200).json(result);
-    } catch (error) {
-      console.error(
-        "Oracle profile creation failed:",
-        error.message
-      );
-
-      return res.status(500).json({
-        error: "Failed to create reward profile"
-      });
-    }
-  }
-
-  let client;
-  let transactionStarted = false;
-
   try {
-    client = await pool.connect();
-    await client.query("BEGIN");
-    transactionStarted = true;
+    const result = await createOracleCustomer({ name, email });
 
-    // Serialize profile creation attempts for the same email.
-    await client.query(
-      "SELECT pg_advisory_xact_lock(hashtext($1))",
-      [email]
-    );
-
-    const existing = await client.query(
-      `SELECT id, whim_id, name, email, created_at
-       FROM customers
-       WHERE LOWER(email) = $1
-       LIMIT 1`,
-      [email]
-    );
-
-    if (existing.rows.length > 0) {
-      await client.query("COMMIT");
-      transactionStarted = false;
-
-
-      return res.status(200).json({
-        created: false,
-        customer: existing.rows[0]
-      });
-    }
-
-    const id = randomUUID();
-
-    const result = await client.query(
-      `INSERT INTO customers (id, name, email)
-       VALUES ($1, $2, $3)
-       RETURNING id, whim_id, name, email, created_at`,
-      [id, name, email]
-    );
-
-    await client.query("COMMIT");
-    transactionStarted = false;
-
-    return res.status(201).json({
-      created: true,
-      customer: result.rows[0]
-    });
+    return res.status(result.created ? 201 : 200).json(result);
   } catch (error) {
-    if (client && transactionStarted) {
-      try {
-        await client.query("ROLLBACK");
-      } catch (rollbackError) {
-        console.error(
-          "Whimstack profile rollback failed:",
-          rollbackError.message
-        );
-      }
-    }
-
-    console.error("Whimstack profile creation failed:", error.message);
+    console.error(
+      "Oracle profile creation failed:",
+      error.message
+    );
 
     return res.status(500).json({
       error: "Failed to create reward profile"
     });
-  } finally {
-    client?.release();
   }
 });
 
@@ -224,88 +146,57 @@ router.get("/customers/balance", async (req, res) => {
   }
 
   try {
-    if (isOracleBackend) {
-      const whimdbPool = await getWhimdbPool();
-      const customerConn = await whimdbPool.getConnection();
-      let customer;
+    const whimdbPool = await getWhimdbPool();
+    const customerConn = await whimdbPool.getConnection();
+    let customer;
 
-      try {
-        const result = await customerConn.execute(
-          `SELECT id, whim_id, name, email
-           FROM customers
-           WHERE LOWER(email) = :identifier
-              OR LOWER(NVL(whim_id, '')) = :identifier
-              OR LOWER(id) = :identifier
-           FETCH FIRST 1 ROWS ONLY`,
-          { identifier }
-        );
+    try {
+      const result = await customerConn.execute(
+        `SELECT id, whim_id, name, email
+         FROM customers
+         WHERE LOWER(email) = :identifier
+            OR LOWER(TO_CHAR(whim_id)) = :identifier
+            OR LOWER(id) = :identifier
+         FETCH FIRST 1 ROWS ONLY`,
+        { identifier }
+      );
 
-        const row = result.rows?.[0];
+      const row = result.rows?.[0];
 
-        if (!row) {
-          return res.status(404).json({
-            error: "Customer not found in WhimReward"
-          });
-        }
-
-        customer = {
-          id: row[0],
-          whim_id: row[1],
-          name: row[2],
-          email: row[3]
-        };
-      } finally {
-        await customerConn.close();
-      }
-
-      const whimtrxPool = await getWhimtrxPool();
-      const trxConn = await whimtrxPool.getConnection();
-
-      try {
-        const balResult = await trxConn.execute(
-          `SELECT NVL(SUM(amount), 0)
-           FROM reward_transactions
-           WHERE customer_id = :id`,
-          { id: customer.id }
-        );
-
-        return res.json({
-          customer,
-          balance: Number(balResult.rows?.[0]?.[0] ?? 0)
+      if (!row) {
+        return res.status(404).json({
+          error: "Customer not found in WhimReward"
         });
-      } finally {
-        await trxConn.close();
       }
+
+      customer = {
+        id: row[0],
+        whim_id: row[1],
+        name: row[2],
+        email: row[3]
+      };
+    } finally {
+      await customerConn.close();
     }
 
-    const custResult = await pool.query(
-      `SELECT id, whim_id, name, email
-       FROM customers
-       WHERE LOWER(email) = $1
-          OR LOWER(COALESCE(whim_id, '')) = $1
-          OR LOWER(id::text) = $1
-       LIMIT 1`,
-      [identifier]
-    );
+    const whimtrxPool = await getWhimtrxPool();
+    const trxConn = await whimtrxPool.getConnection();
 
-    if (custResult.rows.length === 0) {
-      return res.status(404).json({
-        error: "Customer not found in WhimReward"
+    try {
+      const balResult = await trxConn.execute(
+        `SELECT NVL(SUM(amount), 0)
+         FROM reward_transactions
+         WHERE customer_id = :id`,
+        { id: customer.id }
+      );
+
+      return res.json({
+        customer,
+        balance: Number(balResult.rows?.[0]?.[0] ?? 0)
       });
+    } finally {
+      await trxConn.close();
     }
-
-    const customer = custResult.rows[0];
-    const balResult = await pool.query(
-      `SELECT COALESCE(SUM(amount), 0)::INTEGER AS balance
-       FROM reward_transactions
-       WHERE customer_id = $1`,
-      [customer.id]
-    );
-
-    return res.json({
-      customer,
-      balance: balResult.rows[0].balance
-    });
   } catch (error) {
     console.error("Integration balance lookup failed:", error.message);
 

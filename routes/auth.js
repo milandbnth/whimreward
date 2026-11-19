@@ -1,30 +1,12 @@
-
 import { Router } from "express";
-import { pool } from "../db/client.js";
 import { getWhimdbPool } from "../db/oracle-client.js";
-import { isOracleBackend } from "../db/backend.js";
 import { hashPassword, verifyPassword } from "../auth/password.js";
 import { randomUUID } from "crypto";
 import { requireWhimstackSecret } from "./integration.js";
 
-
 const router = Router();
 
 async function findUserByEmail(email) {
-  if (!isOracleBackend) {
-    const result = await pool.query(
-      `
-      SELECT id, name, email, password_hash, is_active
-      FROM users
-      WHERE LOWER(email) = LOWER($1)
-      LIMIT 1
-      `,
-      [email]
-    );
-
-    return result.rows[0] ?? null;
-  }
-
   const oraclePool = await getWhimdbPool();
   const connection = await oraclePool.getConnection();
 
@@ -58,7 +40,6 @@ async function findUserByEmail(email) {
     await connection.close();
   }
 }
-
 
 router.post("/register", requireWhimstackSecret, async (req, res) => {
   const name =
@@ -99,101 +80,73 @@ router.post("/register", requireWhimstackSecret, async (req, res) => {
     const passwordHash = await hashPassword(password);
     const id = randomUUID();
 
-    if (isOracleBackend) {
-      const oraclePool = await getWhimdbPool();
-      connection = await oraclePool.getConnection();
+    const oraclePool = await getWhimdbPool();
+    connection = await oraclePool.getConnection();
 
-      const existing = await connection.execute(
-        `SELECT id
-         FROM users
-         WHERE LOWER(email) = :email
-         FETCH FIRST 1 ROWS ONLY`,
-        { email }
-      );
+    const existing = await connection.execute(
+      `SELECT id
+       FROM users
+       WHERE LOWER(email) = :email
+       FETCH FIRST 1 ROWS ONLY`,
+      { email }
+    );
 
-      if (existing.rows?.length > 0) {
-        return res.status(409).json({
-          error: "A user with this email already exists"
-        });
-      }
-
-      await connection.execute(
-        `INSERT INTO users (
-          id,
-          name,
-          email,
-          password_hash,
-          is_active
-        )
-        VALUES (
-          :id,
-          :name,
-          :email,
-          :password_hash,
-          1
-        )`,
-        {
-          id,
-          name,
-          email,
-          password_hash: passwordHash
-        }
-      );
-
-      await connection.execute(
-        `INSERT INTO audit_log (
-          id,
-          action,
-          user_id,
-          details,
-          created_at
-        )
-        VALUES (
-          :id,
-          :action,
-          :user_id,
-          :details,
-          SYSTIMESTAMP
-        )`,
-        {
-          id: randomUUID(),
-          action: "USER_REGISTERED",
-          user_id: id,
-          details: JSON.stringify({
-            email,
-            source: "whimstack"
-          })
-        }
-      );
-
-      await connection.commit();
-    } else {
-      const existing = await pool.query(
-        `SELECT id
-         FROM users
-         WHERE LOWER(email) = LOWER($1)
-         LIMIT 1`,
-        [email]
-      );
-
-      if (existing.rows.length > 0) {
-        return res.status(409).json({
-          error: "A user with this email already exists"
-        });
-      }
-
-      await pool.query(
-        `INSERT INTO users (
-          id,
-          name,
-          email,
-          password_hash,
-          is_active
-        )
-        VALUES ($1, $2, $3, $4, TRUE)`,
-        [id, name, email, passwordHash]
-      );
+    if (existing.rows?.length > 0) {
+      return res.status(409).json({
+        error: "A user with this email already exists"
+      });
     }
+
+    await connection.execute(
+      `INSERT INTO users (
+        id,
+        name,
+        email,
+        password_hash,
+        is_active
+      )
+      VALUES (
+        :id,
+        :name,
+        :email,
+        :password_hash,
+        1
+      )`,
+      {
+        id,
+        name,
+        email,
+        password_hash: passwordHash
+      }
+    );
+
+    await connection.execute(
+      `INSERT INTO audit_log (
+        id,
+        action,
+        user_id,
+        details,
+        created_at
+      )
+      VALUES (
+        :id,
+        :action,
+        :user_id,
+        :details,
+        SYSTIMESTAMP
+      )`,
+      {
+        id: randomUUID(),
+        action: "USER_REGISTERED",
+        user_id: id,
+        details: JSON.stringify({
+          email,
+          source: "whimstack"
+        })
+      }
+    );
+
+    await connection.commit();
 
     return res.status(201).json({
       message: "User registered successfully",
@@ -213,7 +166,7 @@ router.post("/register", requireWhimstackSecret, async (req, res) => {
       }
     }
 
-    if (error.errorNum === 1 || error.code === "23505") {
+    if (error.errorNum === 1) {
       return res.status(409).json({
         error: "A user with this email already exists"
       });
@@ -230,7 +183,6 @@ router.post("/register", requireWhimstackSecret, async (req, res) => {
     }
   }
 });
-
 
 router.post("/login", async (req, res) => {
   try {

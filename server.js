@@ -1,16 +1,12 @@
-
 import express from "express";
 import "dotenv/config";
-import { pool } from "./db/client.js";
 import customerRoutes from "./routes/customers.js";
 import transactionRoutes from "./routes/transactions.js";
 import session from "express-session";
-import connectPgSimple from "connect-pg-simple";
 import authRoutes from "./routes/auth.js";
 import integrationRoutes from "./routes/integration.js";
-import {databaseBackend,isOracleBackend} from "./db/backend.js";
-import {OracleSessionStore} from "./db/oracle-session-store.js";
-import {getWhimdbPool,getWhimtrxPool,closeOraclePools} from "./db/oracle-client.js";
+import { OracleSessionStore } from "./db/oracle-session-store.js";
+import { getWhimdbPool, getWhimtrxPool, closeOraclePools } from "./db/oracle-client.js";
 
 const app = express();
 
@@ -21,16 +17,7 @@ if (!process.env.SESSION_SECRET) {
   throw new Error("SESSION_SECRET is required");
 }
 
-const PgSession = connectPgSimple(session);
-
-const sessionStore =
-  databaseBackend === "oracle"
-    ? new OracleSessionStore()
-    : new PgSession({
-      pool,
-      tableName: "user_sessions",
-      createTableIfMissing: false
-    });
+const sessionStore = new OracleSessionStore();
 
 app.use(
   session({
@@ -60,40 +47,30 @@ app.use("/transactions", transactionRoutes);
 
 app.get("/health", async (req, res) => {
   try {
-    if (isOracleBackend) {
-      const whimdbPool = await getWhimdbPool();
-      const whimtrxPool = await getWhimtrxPool();
+    const whimdbPool = await getWhimdbPool();
+    const whimtrxPool = await getWhimtrxPool();
 
-      const customerConnection = await whimdbPool.getConnection();
-      const transactionConnection = await whimtrxPool.getConnection();
+    const customerConnection = await whimdbPool.getConnection();
+    const transactionConnection = await whimtrxPool.getConnection();
 
-      try {
-        await customerConnection.execute("SELECT 1 FROM DUAL");
-        await transactionConnection.execute("SELECT 1 FROM DUAL");
-      } finally {
-        await Promise.all([
-          customerConnection.close(),
-          transactionConnection.close()
-        ]);
-      }
-
-      return res.json({
-        status: "ok",
-        database: true,
-        backend: "oracle",
-        databases: {
-          whimdb: true,
-          whimtrx: true
-        }
-      });
+    try {
+      await customerConnection.execute("SELECT 1 FROM DUAL");
+      await transactionConnection.execute("SELECT 1 FROM DUAL");
+    } finally {
+      await Promise.all([
+        customerConnection.close(),
+        transactionConnection.close()
+      ]);
     }
-
-    const result = await pool.query("SELECT 1 AS connected");
 
     return res.json({
       status: "ok",
-      database: result.rows[0].connected === 1,
-      backend: "postgres"
+      database: true,
+      backend: "oracle",
+      databases: {
+        whimdb: true,
+        whimtrx: true
+      }
     });
   } catch (error) {
     console.error("Health check failed:", error.message);
@@ -122,7 +99,6 @@ async function shutdown(signal) {
   server.close(async () => {
     try {
       await closeOraclePools();
-      await pool.end();
       console.log("Database pools closed.");
       process.exit(0);
     } catch (error) {
