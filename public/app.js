@@ -207,9 +207,10 @@ async function selectCustomer(customer) {
   customerWorkspace.classList.remove("hidden");
   selectedCustomerName.textContent = customer.name;
   selectedCustomerEmail.textContent = customer.email || "No email on file";
+  const initialBalance = Number(customer?.balance ?? 0);
   selectedCustomerBalance.replaceChildren(
     createRewardGlyph("small"),
-    document.createTextNode(Number(balanceData.balance).toLocaleString())
+    document.createTextNode((Number.isFinite(initialBalance) ? initialBalance : 0).toLocaleString())
   );
   setMessage(transactionMessage, "");
 
@@ -301,7 +302,7 @@ function renderHistory(transactions) {
       createRewardGlyph("small"),
       document.createTextNode(`${sign}${transaction.amount}`)
     );
-  
+
     amount.className = transaction.amount > 0
       ? "points-positive"
       : "points-negative";
