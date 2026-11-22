@@ -325,6 +325,9 @@ transactionForm.addEventListener("submit", async (event) => {
   try {
     await api("/transactions", {
       method: "POST",
+      headers: {
+        "Idempotency-Key": idempotencyKey
+      },
       body: JSON.stringify({
         customerId: selectedCustomer.id,
         amount,
