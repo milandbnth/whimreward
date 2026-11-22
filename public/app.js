@@ -34,6 +34,14 @@ const logoutButton = document.querySelector("#logout-button");
 let selectedCustomer = null;
 let customers = [];
 
+function createRewardGlyph(variant = "small", className = "") {
+  const span = document.createElement("span");
+  span.className = `w-symbol ${className}`.trim();
+  span.setAttribute("aria-hidden", "true");
+  span.textContent = variant === "display" ? "\uE001" : "\uE000";
+  return span;
+}
+
 async function api(url, options = {}) {
   const response = await fetch(url, {
     credentials: "same-origin",
@@ -168,7 +176,10 @@ async function searchCustomers(search) {
 
       const balance = document.createElement("div");
       balance.className = "balance";
-      balance.textContent = Number(customer.balance).toLocaleString();
+      balance.append(
+        createRewardGlyph("small"),
+        document.createTextNode(Number(customer.balance).toLocaleString())
+      );
 
       const label = document.createElement("div");
       label.className = "balance-label";
@@ -196,7 +207,10 @@ async function selectCustomer(customer) {
   customerWorkspace.classList.remove("hidden");
   selectedCustomerName.textContent = customer.name;
   selectedCustomerEmail.textContent = customer.email || "No email on file";
-  selectedCustomerBalance.textContent = Number(customer.balance).toLocaleString();
+  selectedCustomerBalance.replaceChildren(
+    createRewardGlyph("small"),
+    document.createTextNode(Number(balanceData.balance).toLocaleString())
+  );
   setMessage(transactionMessage, "");
 
   for (const card of customerList.querySelectorAll(".customer-card")) {
@@ -233,7 +247,10 @@ async function refreshCustomer() {
 
     selectedCustomerName.textContent = customerData.name;
     selectedCustomerEmail.textContent = customerData.email || "No email on file";
-    selectedCustomerBalance.textContent = Number(balanceData.balance).toLocaleString();
+    selectedCustomerBalance.replaceChildren(
+      createRewardGlyph("small"),
+      document.createTextNode(Number(balanceData.balance).toLocaleString())
+    );
 
     renderHistory(historyData.transactions);
     await searchCustomers(searchInput.value.trim());
@@ -279,7 +296,12 @@ function renderHistory(transactions) {
     type.textContent = transaction.type;
 
     const amount = document.createElement("td");
-    amount.textContent = `${transaction.amount > 0 ? "+" : ""}${transaction.amount}`;
+    const sign = transaction.amount > 0 ? "+" : "";
+    amount.append(
+      createRewardGlyph("small"),
+      document.createTextNode(`${sign}${transaction.amount}`)
+    );
+  
     amount.className = transaction.amount > 0
       ? "points-positive"
       : "points-negative";

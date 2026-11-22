@@ -1,6 +1,6 @@
-
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -13,7 +13,9 @@
       font-synthesis: none;
     }
 
-    * { box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+    }
 
     body {
       margin: 0;
@@ -21,7 +23,12 @@
       background: #f4f7f4;
     }
 
-    button, input, select, textarea { font: inherit; }
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
 
     button {
       cursor: pointer;
@@ -33,9 +40,14 @@
       font-weight: 650;
     }
 
-    button:disabled { opacity: .55; cursor: not-allowed; }
+    button:disabled {
+      opacity: .55;
+      cursor: not-allowed;
+    }
 
-    input, select, textarea {
+    input,
+    select,
+    textarea {
       width: 100%;
       border: 1px solid #d4ded7;
       border-radius: 9px;
@@ -51,7 +63,9 @@
       font-weight: 650;
     }
 
-    .hidden { display: none !important; }
+    .hidden {
+      display: none !important;
+    }
 
     .login-wrap {
       min-height: 100vh;
@@ -76,13 +90,26 @@
       letter-spacing: -1px;
     }
 
-    .brand span { color: #176b4d; }
+    .brand span {
+      color: #176b4d;
+    }
 
-    .muted { color: #69766e; }
-    .small { font-size: 13px; }
+    .muted {
+      color: #69766e;
+    }
 
-    .field { margin-top: 17px; }
-    .login-card button { width: 100%; margin-top: 22px; }
+    .small {
+      font-size: 13px;
+    }
+
+    .field {
+      margin-top: 17px;
+    }
+
+    .login-card button {
+      width: 100%;
+      margin-top: 22px;
+    }
 
     .app-header {
       display: flex;
@@ -118,9 +145,22 @@
       margin-bottom: 24px;
     }
 
-    h1, h2, p { margin-top: 0; }
-    h1 { margin-bottom: 8px; font-size: clamp(26px, 4vw, 34px); letter-spacing: -1px; }
-    h2 { font-size: 18px; margin-bottom: 18px; }
+    h1,
+    h2,
+    p {
+      margin-top: 0;
+    }
+
+    h1 {
+      margin-bottom: 8px;
+      font-size: clamp(26px, 4vw, 34px);
+      letter-spacing: -1px;
+    }
+
+    h2 {
+      font-size: 18px;
+      margin-bottom: 18px;
+    }
 
     .panel {
       background: white;
@@ -135,8 +175,13 @@
       gap: 10px;
     }
 
-    .search-row input { flex: 1; }
-    .search-row button { white-space: nowrap; }
+    .search-row input {
+      flex: 1;
+    }
+
+    .search-row button {
+      white-space: nowrap;
+    }
 
     .customer-list {
       display: grid;
@@ -155,15 +200,33 @@
       width: 100%;
     }
 
-    .customer-card:hover, .customer-card.selected {
+    .customer-card:hover,
+    .customer-card.selected {
       border-color: #176b4d;
       background: #f0f8f2;
     }
 
-    .customer-name { font-weight: 750; margin-bottom: 5px; }
-    .customer-email { color: #69766e; font-size: 13px; overflow-wrap: anywhere; }
-    .balance { font-size: 24px; font-weight: 800; margin-top: 16px; }
-    .balance-label { color: #69766e; font-size: 12px; }
+    .customer-name {
+      font-weight: 750;
+      margin-bottom: 5px;
+    }
+
+    .customer-email {
+      color: #69766e;
+      font-size: 13px;
+      overflow-wrap: anywhere;
+    }
+
+    .balance {
+      font-size: 24px;
+      font-weight: 800;
+      margin-top: 16px;
+    }
+
+    .balance-label {
+      color: #69766e;
+      font-size: 12px;
+    }
 
     .workspace {
       display: grid;
@@ -172,46 +235,137 @@
       align-items: start;
     }
 
-    .table-wrap { overflow-x: auto; }
+    .table-wrap {
+      overflow-x: auto;
+    }
 
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th, td {
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th,
+    td {
       padding: 12px 10px;
       border-bottom: 1px solid #e8eee9;
       text-align: left;
       vertical-align: top;
     }
 
-    th { color: #69766e; font-weight: 650; }
-    .points-positive { color: #176b4d; font-weight: 750; }
-    .points-negative { color: #b13e3e; font-weight: 750; }
+    th {
+      color: #69766e;
+      font-weight: 650;
+    }
 
-    .form-field { margin-bottom: 16px; }
-    textarea { min-height: 80px; resize: vertical; }
-    .notice { margin-top: 14px; font-size: 13px; }
-    .error { color: #b42318; }
-    .success { color: #176b4d; }
-    .empty { padding: 22px 0; color: #69766e; font-size: 14px; }
-    .disclaimer { font-size: 12px; color: #69766e; margin-top: 14px; }
+    .points-positive {
+      color: #176b4d;
+      font-weight: 750;
+    }
+
+    .points-negative {
+      color: #b13e3e;
+      font-weight: 750;
+    }
+
+    .form-field {
+      margin-bottom: 16px;
+    }
+
+    textarea {
+      min-height: 80px;
+      resize: vertical;
+    }
+
+    .notice {
+      margin-top: 14px;
+      font-size: 13px;
+    }
+
+    .error {
+      color: #b42318;
+    }
+
+    .success {
+      color: #176b4d;
+    }
+
+    .empty {
+      padding: 22px 0;
+      color: #69766e;
+      font-size: 14px;
+    }
+
+    .disclaimer {
+      font-size: 12px;
+      color: #69766e;
+      margin-top: 14px;
+    }
 
     @media (max-width: 760px) {
-      .workspace { grid-template-columns: 1fr; }
-      .app-header { padding: 16px 4%; align-items: flex-start; }
-      .employee { flex-direction: column; align-items: flex-end; }
-      .page-heading { align-items: flex-start; flex-direction: column; }
-      .panel { padding: 17px; }
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+
+      .app-header {
+        padding: 16px 4%;
+        align-items: flex-start;
+      }
+
+      .employee {
+        flex-direction: column;
+        align-items: flex-end;
+      }
+
+      .page-heading {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .panel {
+        padding: 17px;
+      }
     }
 
     @media (max-width: 440px) {
-      .search-row { flex-direction: column; }
-      .login-card { padding: 24px; }
+      .search-row {
+        flex-direction: column;
+      }
+
+      .login-card {
+        padding: 24px;
+      }
+    }
+
+    @font-face {
+      font-family: "W Symbol";
+      src: url("/fonts/WSymbol-Regular.woff") format("woff");
+      font-weight: normal;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    .w-symbol {
+      font-family: "W Symbol", sans-serif;
+      font-style: normal;
+      font-weight: normal;
+      line-height: 1;
+    }
+
+    /* Optional sizing if using inline SVGs */
+    .w-symbol-svg {
+      display: inline-block;
+      width: 1em;
+      height: 1em;
+      vertical-align: -0.125em;
     }
   </style>
 </head>
+
 <body>
   <section id="login-view" class="login-wrap">
     <form id="login-form" class="login-card">
-      <div class="brand">Whim<span>Reward</span></div>
+      <div class="brand"><span class="w-symbol" aria-hidden="true">&#xE001;</span> Whim<span>Reward</span></div>
       <p class="muted" style="margin-top: 8px">Employee rewards ledger</p>
 
       <div class="field">
@@ -252,8 +406,7 @@
       <section class="panel">
         <h2>Find a customer</h2>
         <form id="search-form" class="search-row">
-          <input id="customer-search" type="search" maxlength="100"
-                 placeholder="Search by customer name or email">
+          <input id="customer-search" type="search" maxlength="100" placeholder="Search by customer name or email">
           <button id="search-button" type="submit">Search</button>
         </form>
         <div id="customer-list" class="customer-list">
@@ -295,21 +448,20 @@
 
               <div class="form-field">
                 <label for="transaction-amount">Points</label>
-                <input id="transaction-amount" type="number" step="1" min="1"
-                       inputmode="numeric" required placeholder="Enter whole points">
+                <input id="transaction-amount" type="number" step="1" min="1" inputmode="numeric" required
+                  placeholder="Enter whole points">
                 <div class="disclaimer">Enter a positive whole number. Redemptions will subtract those points.</div>
               </div>
 
               <div class="form-field">
                 <label for="transaction-reason">Reason</label>
                 <textarea id="transaction-reason" maxlength="1000" required
-                          placeholder="Explain why these points are being added or redeemed"></textarea>
+                  placeholder="Explain why these points are being added or redeemed"></textarea>
               </div>
 
               <div class="form-field">
                 <label for="transaction-reference">Reference (optional)</label>
-                <input id="transaction-reference" maxlength="200"
-                       placeholder="Receipt, order, or internal reference">
+                <input id="transaction-reference" maxlength="200" placeholder="Receipt, order, or internal reference">
               </div>
 
               <button id="post-button" type="submit" style="width:100%">Post transaction</button>
@@ -324,4 +476,5 @@
 
   <script src="/app.js" defer></script>
 </body>
+
 </html>
