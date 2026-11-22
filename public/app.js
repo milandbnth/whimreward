@@ -319,6 +319,8 @@ transactionForm.addEventListener("submit", async (event) => {
     return;
   }
 
+  const idempotencyKey = crypto.randomUUID();
+
   postButton.disabled = true;
   setMessage(transactionMessage, "Posting transaction…", "muted");
 
