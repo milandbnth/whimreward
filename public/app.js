@@ -149,7 +149,7 @@ async function searchCustomers(search) {
 
   try {
     const data = await api(`/customers?search=${encodeURIComponent(search)}`);
-    customers = data.customers;
+    customers = Array.isArray(data?.customers) ? data.customers : [];
 
     customerList.replaceChildren();
 
@@ -165,10 +165,19 @@ async function searchCustomers(search) {
       const card = document.createElement("button");
       card.type = "button";
       card.className = "customer-card";
+      if (customer.whim_id != null) {
+        card.dataset.whimId = String(customer.whim_id);
+      }
 
       const name = document.createElement("div");
       name.className = "customer-name";
       name.textContent = customer.name;
+
+      const whimId = document.createElement("div");
+      whimId.className = "customer-whim-id";
+      whimId.textContent = customer.whim_id != null
+        ? `Whim ID: ${customer.whim_id}`
+        : "Whim ID: —";
 
       const email = document.createElement("div");
       email.className = "customer-email";
@@ -185,9 +194,13 @@ async function searchCustomers(search) {
       label.className = "balance-label";
       label.textContent = "Reward points";
 
-      card.append(name, email, balance, label);
+      card.append(name, whimId, email, balance, label);
 
-      if (selectedCustomer?.id === customer.id) {
+      const isSelected =
+        (customer.whim_id != null && selectedCustomer?.whim_id === customer.whim_id) ||
+        (customer.whim_id == null && selectedCustomer?.id === customer.id);
+
+        if (isSelected) {
         card.classList.add("selected");
       }
 
@@ -215,7 +228,10 @@ async function selectCustomer(customer) {
   setMessage(transactionMessage, "");
 
   for (const card of customerList.querySelectorAll(".customer-card")) {
-    card.classList.remove("selected");
+    const isSelected =
+      customer?.whim_id != null &&
+      card.dataset.whimId === String(customer.whim_id);
+    card.classList.toggle("selected", isSelected);
   }
 
   const selectedCard = [...customerList.querySelectorAll(".customer-card")]
