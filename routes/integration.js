@@ -105,17 +105,33 @@ router.post("/profiles", async (req, res) => {
       ? req.body.email.trim().toLowerCase()
       : "";
 
+  const phone =
+    typeof req.body.phone === "string" ? req.body.phone.trim() : "";
+
   if (!name || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return res.status(400).json({
       error: "A valid name and email are required"
     });
   }
 
+  if (!/^\d{10}$/.test(phone)) {
+    return res.status(400).json({
+      error: "A valid 10-digit phone number is required",
+    });
+  }
+
   try {
-    const result = await createOracleCustomer({ name, email });
+    const result = await createOracleCustomer({ name, email, phone });
 
     return res.status(result.created ? 201 : 200).json(result);
   } catch (error) {
+
+    // Handle Oracle unique constraint violation (ORA-00001) on MOBILE
+    if (error.errorNum === 1 || error.message?.includes("UQ_CUST_PHONE")) {
+      return res.status(409).json({
+        error: "A customer with this mobile number already exists",
+      });
+    }
     console.error(
       "Oracle profile creation failed:",
       error.message
